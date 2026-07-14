@@ -210,6 +210,40 @@ def _first(value: Any) -> str:
 
 # --- Heuristische HTML-Extraktion (Fallback) ---
 
+# Häufige Seiten-/Navigationstitel, die keine echten Firmennamen sind. Ohne diesen
+# Filter würde z.B. die Kontakt- und die Impressum-Seite derselben Firma zwei
+# unterschiedliche "Standorte" ergeben, weil <h1>Kontakt</h1> bzw. <h1>Impressum</h1>
+# fälschlich als Firmenname übernommen würden.
+_GENERISCHE_SEITENTITEL = {
+    "kontakt", "impressum", "datenschutz", "start", "startseite", "home",
+    "über uns", "ueber uns", "anfahrt", "standort", "standorte", "team",
+}
+
+
+def _ist_generischer_titel(text: str) -> bool:
+    return text.strip().lower() in _GENERISCHE_SEITENTITEL
+
+
+def _business_name(tree: HTMLParser, fallback: str) -> str:
+    h1_node = tree.css_first("h1")
+    h1_text = _clean_text(h1_node.text()) if h1_node else ""
+    if h1_text and not _ist_generischer_titel(h1_text):
+        return h1_text
+
+    title_node = tree.css_first("title")
+    title_text = _clean_text(title_node.text()) if title_node else ""
+    for teil in re.split(r"\s*[-|–:]\s*", title_text):
+        if teil and not _ist_generischer_titel(teil):
+            return teil
+
+    og_site_name = tree.css_first("meta[property='og:site_name']")
+    if og_site_name:
+        wert = _clean_text(og_site_name.attributes.get("content", ""))
+        if wert:
+            return wert
+
+    return h1_text or title_text or fallback
+
 
 def extract_heuristic_locations(html: str, url: str) -> list[Location]:
     tree = HTMLParser(html)
@@ -245,8 +279,7 @@ def extract_heuristic_locations(html: str, url: str) -> list[Location]:
         elif tel_links:
             phone = tel_links[0]
 
-        title_node = tree.css_first("h1") or tree.css_first("title")
-        name = _clean_text(title_node.text()) if title_node else city or "Standort"
+        name = _business_name(tree, fallback=city or "Standort")
 
         locations.append(
             Location(

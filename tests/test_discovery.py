@@ -89,6 +89,18 @@ def test_dedupe_locations_merged_ueber_seiten():
     assert merged[0].phone
 
 
+def test_html_kontakt_seite_mit_generischem_h1_nutzt_firmenname_aus_title():
+    """Regressionstest: <h1>Kontakt</h1> darf nicht als Firmenname übernommen werden -
+    sonst ergeben Kontakt-/Impressum-/Startseite derselben Firma fälschlich mehrere
+    'Standorte', weil die Namen (Kontakt vs. Impressum vs. echter Firmenname) nicht
+    zusammengeführt werden."""
+    html = _read("kontakt_generischer_h1.html")
+    locations = extract_locations_from_html(html, "https://musterfirma.de/kontakt")
+
+    assert len(locations) == 1
+    assert locations[0].name == "Musterfirma GmbH"
+
+
 def test_extract_heuristic_locations_ohne_treffer_liefert_leere_liste():
     html = "<html><body><h1>Über uns</h1><p>Wir sind ein tolles Team.</p></body></html>"
     assert extract_heuristic_locations(html, "https://example.de/ueber-uns") == []

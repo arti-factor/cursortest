@@ -95,7 +95,7 @@ class PlacesClient:
     def text_search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         """`places:searchText` - liefert Kandidaten für das Matching."""
         body = {"textQuery": query, "maxResultCount": max_results}
-        data = self._post(":searchText", body, self.text_search_field_mask)
+        data = self._post("/places:searchText", body, self.text_search_field_mask)
         return data.get("places", [])
 
     def search_nearby(
@@ -110,7 +110,7 @@ class PlacesClient:
         }
         if included_types:
             body["includedTypes"] = included_types
-        data = self._post(":searchNearby", body, self.text_search_field_mask)
+        data = self._post("/places:searchNearby", body, self.text_search_field_mask)
         return data.get("places", [])
 
     def get_place_details(self, place_id: str) -> dict[str, Any]:
