@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Mandantendaten sind lokale/kundenspezifische Rohdaten und Reports - nicht versionieren
+clients/*/
+!clients/.gitkeep
+!clients/README.md
+
+token.json
+*.token.json

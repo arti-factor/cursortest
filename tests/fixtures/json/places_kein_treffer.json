@@ -1,0 +1,13 @@
+[
+  {
+    "id": "ChIJ_voellig_anders",
+    "displayName": {"text": "Autohaus Wagner"},
+    "formattedAddress": "Industrieweg 9, 99999 Weitweg, Deutschland",
+    "location": {"latitude": 48.1, "longitude": 11.5},
+    "internationalPhoneNumber": "+49 89 5556677",
+    "websiteUri": "https://autohaus-wagner.de",
+    "primaryType": "car_dealer",
+    "types": ["car_dealer"],
+    "businessStatus": "OPERATIONAL"
+  }
+]

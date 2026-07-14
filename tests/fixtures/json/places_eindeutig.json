@@ -1,0 +1,13 @@
+[
+  {
+    "id": "ChIJ_eindeutig123",
+    "displayName": {"text": "Beispiel GmbH Musterstadt"},
+    "formattedAddress": "Musterstraße 12, 12345 Musterstadt, Deutschland",
+    "location": {"latitude": 52.52, "longitude": 13.405},
+    "internationalPhoneNumber": "+49 30 1234567",
+    "websiteUri": "https://beispiel-gmbh.de/musterstadt",
+    "primaryType": "corporate_office",
+    "types": ["corporate_office", "point_of_interest"],
+    "businessStatus": "OPERATIONAL"
+  }
+]

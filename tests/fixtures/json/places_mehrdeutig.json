@@ -1,0 +1,24 @@
+[
+  {
+    "id": "ChIJ_mehrdeutig_a",
+    "displayName": {"text": "FitCorp Studio Berlin"},
+    "formattedAddress": "Hauptstraße 1, 10115 Berlin, Deutschland",
+    "location": {"latitude": 52.531, "longitude": 13.383},
+    "internationalPhoneNumber": "+49 30 1111111",
+    "websiteUri": "https://fitcorp-beispiel.de/berlin-mitte",
+    "primaryType": "gym",
+    "types": ["gym"],
+    "businessStatus": "OPERATIONAL"
+  },
+  {
+    "id": "ChIJ_mehrdeutig_b",
+    "displayName": {"text": "FitCorp Studio Berlin"},
+    "formattedAddress": "Ringstraße 40, 10115 Berlin, Deutschland",
+    "location": {"latitude": 52.49, "longitude": 13.42},
+    "internationalPhoneNumber": "+49 30 2222222",
+    "websiteUri": "https://fitcorp-beispiel.de/berlin-sued",
+    "primaryType": "gym",
+    "types": ["gym"],
+    "businessStatus": "OPERATIONAL"
+  }
+]

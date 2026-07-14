@@ -1,0 +1,152 @@
+# Globale Default-Konfiguration für gbp-audit.
+# Kundenspezifische Overrides liegen in clients/<kunde>/config.yaml und werden
+# über diese Defaults gemerged (tiefes Merge, kundenspezifische Werte gewinnen).
+
+# --- Discovery (Website-Crawl) ---
+discovery:
+  max_crawl_depth: 2
+  max_pages: 60
+  request_timeout_seconds: 15
+  user_agent: "gbp-audit-bot/0.1 (+https://seo-profession.de/bot)"
+  respect_robots_txt: true
+  # Pfade, die bevorzugt gecrawlt werden, sobald sie über Sitemap/Links gefunden werden
+  candidate_paths:
+    - "/kontakt"
+    - "/kontakt/"
+    - "/impressum"
+    - "/impressum/"
+    - "/standorte"
+    - "/standort"
+    - "/filialen"
+    - "/filiale"
+    - "/niederlassungen"
+    - "/niederlassung"
+    - "/stores"
+    - "/locations"
+    - "/standortfinder"
+  # Ankertext-Muster (case-insensitive, Teilstring), denen intern gefolgt wird
+  anchor_keywords:
+    - "kontakt"
+    - "impressum"
+    - "standort"
+    - "filiale"
+    - "niederlassung"
+    - "adresse"
+    - "anfahrt"
+    - "store"
+    - "location"
+
+# --- Matching (Website-Standort <-> GBP) ---
+matching:
+  name_similarity_threshold: 78 # rapidfuzz token_sort_ratio, 0-100
+  auto_accept_threshold: 90 # >= dieser Konfidenz: automatisch übernehmen
+  review_threshold: 60 # zwischen review_threshold und auto_accept_threshold: Nutzer wählt
+  duplicate_search_radius_meters: 500
+  weights:
+    name: 0.4
+    address: 0.3
+    phone: 0.2
+    website_domain: 0.1
+
+# --- Scoring / Gewichte je Kriteriengruppe (müssen in Summe 100 ergeben) ---
+scoring:
+  group_weights:
+    existenz_auffindbarkeit: 10
+    basisdaten_nap: 15
+    kategorien: 10
+    oeffnungszeiten: 10
+    beschreibung_attribute: 10
+    fotos: 10
+    bewertungen: 15
+    qna: 5
+    leistungen: 5
+    performance: 10
+  ampel:
+    gruen_ab: 85
+    gelb_ab: 60 # darunter = rot
+
+# --- Places API (New) ---
+places_api:
+  base_url: "https://places.googleapis.com/v1"
+  text_search_field_mask:
+    - "places.id"
+    - "places.displayName"
+    - "places.formattedAddress"
+    - "places.location"
+    - "places.internationalPhoneNumber"
+    - "places.nationalPhoneNumber"
+    - "places.websiteUri"
+    - "places.primaryType"
+    - "places.types"
+    - "places.businessStatus"
+  details_field_mask:
+    - "id"
+    - "displayName"
+    - "formattedAddress"
+    - "addressComponents"
+    - "location"
+    - "internationalPhoneNumber"
+    - "nationalPhoneNumber"
+    - "websiteUri"
+    - "primaryType"
+    - "primaryTypeDisplayName"
+    - "types"
+    - "businessStatus"
+    - "regularOpeningHours"
+    - "currentOpeningHours"
+    - "rating"
+    - "userRatingCount"
+    - "reviews"
+    - "photos"
+  max_retries: 5
+  backoff_base_seconds: 1.0
+
+# --- GBP APIs (Modus B, nur bei eingerichtetem OAuth) ---
+gbp_api:
+  business_information_base_url: "https://mybusinessbusinessinformation.googleapis.com/v1"
+  account_management_base_url: "https://mybusinessaccountmanagement.googleapis.com/v1"
+  performance_base_url: "https://businessprofileperformance.googleapis.com/v1"
+  legacy_v4_base_url: "https://mybusiness.googleapis.com/v4"
+  oauth_scopes:
+    - "https://www.googleapis.com/auth/business.manage"
+  performance_metrics:
+    - "BUSINESS_IMPRESSIONS_DESKTOP_SEARCH"
+    - "BUSINESS_IMPRESSIONS_DESKTOP_MAPS"
+    - "BUSINESS_IMPRESSIONS_MOBILE_SEARCH"
+    - "BUSINESS_IMPRESSIONS_MOBILE_MAPS"
+    - "BUSINESS_DIRECTION_REQUESTS"
+    - "CALL_CLICKS"
+    - "WEBSITE_CLICKS"
+  performance_lookback_days: 365
+  max_retries: 5
+  backoff_base_seconds: 1.0
+
+# --- Check-spezifische Defaults ---
+checks:
+  beschreibung_mindestlaenge: 250
+  beschreibung_duplikat_aehnlichkeit_max: 85 # ab diesem Wert (rapidfuzz) gilt Beschreibung als Duplikat
+  fotos_mindestanzahl_inhaber: 10
+  fotos_max_alter_monate: 12
+  bewertungen_branchen_benchmark: 4.3
+  leistungen_mindestanzahl: 3
+  performance_schwaechste_quartil_prozent: 10
+
+# --- Report ---
+report:
+  currency_locale: "de_DE"
+  top_massnahmen_je_standort: 3
+
+# --- Kundenspezifische Overrides ---
+# Die folgenden Schlüssel existieren hier bewusst nicht mit Default-Werten -
+# sie werden je Kunde in clients/<kunde>/config.yaml gesetzt und dann mit
+# dieser globalen Konfiguration gemerged. Beispiel für clients/<kunde>/config.yaml:
+#
+# kategorien:
+#   soll_hauptkategorie: "gym"          # Gruppe 2: erwartete Hauptkategorie
+# beschreibung_attribute:
+#   erwartete_attribute: ["wheelchair_accessible_entrance", "wifi"]  # Gruppe 4 (Modus B)
+# bewertungen:
+#   keywords: ["freundlich", "sauber", "schnell"]  # Gruppe 6 (Modus B): Keyword-Analyse
+# scoring:
+#   group_weights:
+#     bewertungen: 20                  # überschreibt einzelne Gewichte bei Bedarf

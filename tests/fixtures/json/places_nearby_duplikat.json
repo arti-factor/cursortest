@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ChIJ_eindeutig123",
+    "displayName": {"text": "Beispiel GmbH Musterstadt"},
+    "formattedAddress": "Musterstraße 12, 12345 Musterstadt, Deutschland",
+    "location": {"latitude": 52.52, "longitude": 13.405},
+    "businessStatus": "OPERATIONAL"
+  },
+  {
+    "id": "ChIJ_alteintrag_verwaist",
+    "displayName": {"text": "Beispiel GmbH Musterstadt (alt)"},
+    "formattedAddress": "Musterstraße 12, 12345 Musterstadt, Deutschland",
+    "location": {"latitude": 52.5201, "longitude": 13.4051},
+    "businessStatus": "CLOSED_PERMANENTLY"
+  },
+  {
+    "id": "ChIJ_unrelated_shop",
+    "displayName": {"text": "Bäckerei Krumbach"},
+    "formattedAddress": "Nebenstraße 3, 12345 Musterstadt, Deutschland",
+    "location": {"latitude": 52.521, "longitude": 13.406},
+    "businessStatus": "OPERATIONAL"
+  }
+]
