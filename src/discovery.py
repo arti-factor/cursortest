@@ -334,28 +334,70 @@ def extract_locations_from_html(html: str, url: str) -> list[Location]:
     return extract_heuristic_locations(html, url)
 
 
+def _normalize_street(street: str) -> str:
+    return re.sub(r"\s+", " ", street or "").strip().lower()
+
+
+def _quelle_prioritaet(source_url: str) -> int:
+    """Impressum-Seiten enthalten gesetzlich den korrekten Firmennamen - bei
+    zusammengeführten Standorten wird deren Name bevorzugt übernommen."""
+    u = (source_url or "").lower()
+    if "impressum" in u:
+        return 2
+    if "kontakt" in u:
+        return 1
+    return 0
+
+
 def dedupe_locations(locations: Iterable[Location]) -> list[Location]:
-    """Führt Standorte über mehrere Seiten hinweg anhand von PLZ+Namensähnlichkeit zusammen."""
+    """Führt Standorte über mehrere Seiten hinweg zusammen.
+
+    Zwei Funde gelten als derselbe Standort, wenn entweder Straße+PLZ exakt
+    übereinstimmen (starkes Signal - eine einzelne Website mit Kontakt-/
+    Impressum-/Startseite liefert oft unterschiedliche Namen für dieselbe
+    Adresse) oder der Name bei gleicher PLZ ausreichend ähnlich ist.
+    """
     from rapidfuzz import fuzz
 
     result: list[Location] = []
+    prioritaeten: dict[str, int] = {}
+
     for loc in locations:
         match = None
         for existing in result:
-            if existing.zip and existing.zip == loc.zip:
-                if fuzz.token_sort_ratio(existing.name.lower(), loc.name.lower()) >= 85:
-                    match = existing
-                    break
-            elif not existing.zip and not loc.zip and existing.name.lower() == loc.name.lower():
+            gleiche_adresse = (
+                bool(existing.zip)
+                and existing.zip == loc.zip
+                and bool(existing.street)
+                and bool(loc.street)
+                and _normalize_street(existing.street) == _normalize_street(loc.street)
+            )
+            aehnlicher_name = (
+                bool(existing.zip)
+                and existing.zip == loc.zip
+                and fuzz.token_sort_ratio(existing.name.lower(), loc.name.lower()) >= 85
+            )
+            kein_zip_gleicher_name = (
+                not existing.zip and not loc.zip and existing.name.lower() == loc.name.lower()
+            )
+            if gleiche_adresse or aehnlicher_name or kein_zip_gleicher_name:
                 match = existing
                 break
+
         if match:
             # fehlende Felder aus dem neuen Fund ergänzen, ohne Bestehendes zu überschreiben
             for field_name in ("street", "zip", "city", "phone"):
                 if not getattr(match, field_name) and getattr(loc, field_name):
                     setattr(match, field_name, getattr(loc, field_name))
+            neue_prio = _quelle_prioritaet(loc.source_url)
+            if neue_prio > prioritaeten.get(match.id, 0):
+                match.name = loc.name
+                match.id = _make_slug(match.name, match.zip)
+                prioritaeten[match.id] = neue_prio
         else:
             result.append(loc)
+            prioritaeten[loc.id] = _quelle_prioritaet(loc.source_url)
+
     return result
 
 

@@ -6,6 +6,7 @@ from src.discovery import (
     extract_locations_from_html,
     extract_json_ld_locations,
 )
+from src.models import Location
 
 FIXTURES = Path(__file__).parent / "fixtures" / "html"
 
@@ -123,6 +124,32 @@ def test_html_strasse_ohne_erkanntes_suffix_wird_per_fallback_gefunden():
     assert locations[0].street == "Drubbel 5/6"
     assert locations[0].zip == "48143"
     assert locations[0].city == "Münster"
+
+
+def test_dedupe_merged_bei_gleicher_adresse_trotz_unterschiedlicher_namen():
+    """Regressionstest gegen einen echten Kundenfall: Kontakt-/Impressum-/Startseite
+    derselben Firma lieferten drei völlig verschiedene Namen ('Online-Profession',
+    'Online-Profession GmbH & Co. KG', 'Online Marketing Agentur aus Münster'), aber
+    identische Adresse - die reine Namensähnlichkeit reichte zum Zusammenführen nicht.
+    Bei gleicher Straße+PLZ soll trotzdem zusammengeführt werden, und der Name von
+    der Impressum-Seite (gesetzlich korrekter Firmenname) soll gewinnen."""
+    kontakt = Location(
+        id="a", name="Online-Profession", street="Drubbel 5/6", zip="48143", city="Münster",
+        phone="+49251590630", source_url="https://online-profession.de/kontakt",
+    )
+    impressum = Location(
+        id="b", name="Online-Profession GmbH & Co. KG", street="Drubbel 5/6", zip="48143", city="Münster",
+        phone="+492515906300", source_url="https://online-profession.de/impressum",
+    )
+    homepage = Location(
+        id="c", name="Online Marketing Agentur aus Münster", street="Drubbel 5/6", zip="48143", city="Münster",
+        phone="+49251590630", source_url="https://online-profession.de/",
+    )
+
+    merged = dedupe_locations([kontakt, impressum, homepage])
+
+    assert len(merged) == 1
+    assert merged[0].name == "Online-Profession GmbH & Co. KG"
 
 
 def test_extract_heuristic_locations_ohne_treffer_liefert_leere_liste():
