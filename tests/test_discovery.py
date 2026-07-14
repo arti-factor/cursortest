@@ -101,6 +101,17 @@ def test_html_kontakt_seite_mit_generischem_h1_nutzt_firmenname_aus_title():
     assert locations[0].name == "Musterfirma GmbH"
 
 
+def test_html_titel_mit_bindestrich_im_markennamen_bleibt_ungeteilt():
+    """Regressionstest: 'Online-Profession - Kontakt' darf beim Splitten des
+    <title>-Tags nicht am Bindestrich *innerhalb* des Markennamens zerlegt werden
+    (nur am umgebenen ' - ' als echtem Trenner)."""
+    html = _read("kontakt_bindestrich_marke.html")
+    locations = extract_locations_from_html(html, "https://online-profession.de/kontakt")
+
+    assert len(locations) == 1
+    assert locations[0].name == "Online-Profession"
+
+
 def test_extract_heuristic_locations_ohne_treffer_liefert_leere_liste():
     html = "<html><body><h1>Über uns</h1><p>Wir sind ein tolles Team.</p></body></html>"
     assert extract_heuristic_locations(html, "https://example.de/ueber-uns") == []

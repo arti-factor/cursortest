@@ -232,7 +232,10 @@ def _business_name(tree: HTMLParser, fallback: str) -> str:
 
     title_node = tree.css_first("title")
     title_text = _clean_text(title_node.text()) if title_node else ""
-    for teil in re.split(r"\s*[-|–:]\s*", title_text):
+    # "-"/"–" nur als Trenner werten, wenn auf beiden Seiten ein Leerzeichen steht -
+    # sonst würde ein Bindestrich-Markenname wie "Online-Profession" fälschlich in
+    # "Online" + "Profession" zerlegt.
+    for teil in re.split(r"\s+[-–]\s+|\s*[|:]\s*", title_text):
         if teil and not _ist_generischer_titel(teil):
             return teil
 
