@@ -40,6 +40,10 @@ _PHONE_RE = re.compile(
     r"(?P<phone>(?:\+49[\s\-/]?|0)\(?\d{2,5}\)?[\s\-/]?\d{3,}[\s\-/]?\d{0,10})",
     re.IGNORECASE,
 )
+# Fallback für Straßennamen ohne die üblichen Endungen (z.B. historische Namen wie
+# "Drubbel" in Münsters Altstadt) - eine ganze Zeile, die mit einem Großbuchstaben
+# beginnt und mit einer Hausnummer endet, direkt vor der PLZ/Ort-Zeile.
+_STREET_FALLBACK_RE = re.compile(r"^[A-ZÄÖÜ][\w.\- ]{1,40}?\s\d+[a-zA-Z]?(?:\s*/\s*\d+[a-zA-Z]?)?$")
 
 
 @dataclass
@@ -248,6 +252,18 @@ def _business_name(tree: HTMLParser, fallback: str) -> str:
     return h1_text or title_text or fallback
 
 
+def _street_fallback_from_context(text: str, match_start: int) -> str:
+    """Prüft die Zeile direkt vor dem PLZ/Ort-Treffer auf ein plausibles
+    "Name + Hausnummer"-Muster, falls die endungsbasierte _STREET_RE nichts fand."""
+    zeilen_davor = text[:match_start].split("\n")
+    gleiche_zeile_praefix = _clean_text(zeilen_davor[-1].rstrip(", "))
+    vorherige_zeile = _clean_text(zeilen_davor[-2]) if len(zeilen_davor) >= 2 else ""
+    for kandidat in (gleiche_zeile_praefix, vorherige_zeile):
+        if kandidat and _STREET_FALLBACK_RE.match(kandidat):
+            return kandidat
+    return ""
+
+
 def extract_heuristic_locations(html: str, url: str) -> list[Location]:
     tree = HTMLParser(html)
     for tag in tree.css("script, style, nav, footer[aria-hidden]"):
@@ -274,6 +290,8 @@ def extract_heuristic_locations(html: str, url: str) -> list[Location]:
         window = text[window_start : m.end() + 40]
         street_match = _STREET_RE.search(window)
         street = _clean_text(street_match.group("street")) if street_match else ""
+        if not street:
+            street = _street_fallback_from_context(text, m.start())
 
         phone = ""
         phone_match = _PHONE_RE.search(window)

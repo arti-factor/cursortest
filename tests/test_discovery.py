@@ -112,6 +112,19 @@ def test_html_titel_mit_bindestrich_im_markennamen_bleibt_ungeteilt():
     assert locations[0].name == "Online-Profession"
 
 
+def test_html_strasse_ohne_erkanntes_suffix_wird_per_fallback_gefunden():
+    """Regressionstest: Straßennamen wie 'Drubbel' (Münsteraner Altstadt) enden nicht
+    auf -straße/-weg/-platz/... und wurden bisher nicht als Straße erkannt, obwohl
+    sie direkt vor der PLZ/Ort-Zeile stehen."""
+    html = _read("strasse_ohne_suffix.html")
+    locations = extract_locations_from_html(html, "https://online-profession.de/kontakt")
+
+    assert len(locations) == 1
+    assert locations[0].street == "Drubbel 5/6"
+    assert locations[0].zip == "48143"
+    assert locations[0].city == "Münster"
+
+
 def test_extract_heuristic_locations_ohne_treffer_liefert_leere_liste():
     html = "<html><body><h1>Über uns</h1><p>Wir sind ein tolles Team.</p></body></html>"
     assert extract_heuristic_locations(html, "https://example.de/ueber-uns") == []
