@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ slug }} - gbp-audit{% endblock %}
+{% block content %}
+<h1>{{ slug }}</h1>
+
+<div class="panel">
+  <h2 style="margin-top:0">Standorte ({{ locations|length }})</h2>
+  {% if not has_locations %}
+  <p class="muted">Noch keine Standorte gespeichert.</p>
+  {% else %}
+  <table>
+  <thead><tr><th>Name</th><th>Adresse</th><th>Google-Profil</th></tr></thead>
+  <tbody>
+  {% for loc in locations %}
+  <tr>
+    <td>{{ loc.name }}</td>
+    <td>{{ loc.address }}</td>
+    <td>
+      {% if loc.place_id %}<span class="badge gruen">zugeordnet</span>
+      {% elif loc.match_status and loc.match_status.value == "kein_treffer" %}<span class="badge rot">kein Treffer</span>
+      {% else %}<span class="badge na">offen</span>{% endif %}
+      {% if loc.duplicate_place_ids %}<span class="badge gelb">{{ loc.duplicate_place_ids|length }} Duplikat(e)</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  </table>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('client_discover', slug=slug) }}" style="margin-top:1rem">
+    <label for="url">Standort-Discovery erneut ausführen (Domain/URL)</label>
+    <input type="url" id="url" name="url" value="{{ locations[0].source_url if locations else '' }}" required>
+    <div class="actions">
+      <button type="submit" class="btn secondary">Standorte neu erkennen</button>
+      <a class="btn secondary" href="{{ url_for('locations_review_form', slug=slug) }}">Standorte manuell bearbeiten</a>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Aktionen</h2>
+  <div class="actions">
+    <form method="post" action="{{ url_for('client_match', slug=slug) }}">
+      <button type="submit" {{ "disabled" if not has_locations }}>GBP-Matching starten</button>
+    </form>
+    <form method="post" action="{{ url_for('client_run', slug=slug) }}">
+      <button type="submit" {{ "disabled" if not has_locations }}>Audit-Lauf starten</button>
+    </form>
+    <a class="btn secondary" href="{{ url_for('diff_form', slug=slug) }}">Läufe vergleichen</a>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Modus B (Full Audit)</h2>
+  {% if modus_b %}
+  <p><span class="badge gruen">eingerichtet</span> - Audit-Läufe nutzen automatisch die zusätzlichen Google-Business-Profile-APIs.</p>
+  {% else %}
+  <p class="muted">Noch nicht eingerichtet. Erfordert eine vom Kunden freigeschaltete GBP-API-Quota und eine "Web-Anwendung"-OAuth-Client-ID in der Google Cloud Console (siehe README).</p>
+  <a class="btn secondary" href="{{ url_for('auth_start', slug=slug) }}">Modus B einrichten</a>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Läufe</h2>
+  {% if not runs %}
+  <p class="muted">Noch kein Audit-Lauf durchgeführt.</p>
+  {% else %}
+  <table>
+  <thead><tr><th>Datum</th><th></th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr><td>{{ r }}</td><td><a class="btn secondary" href="{{ url_for('report_view', slug=slug, run_date=r) }}">Report ansehen</a></td></tr>
+  {% endfor %}
+  </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

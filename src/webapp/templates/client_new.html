@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Neuer Mandant - gbp-audit{% endblock %}
+{% block content %}
+<h1>Neuen Mandanten anlegen</h1>
+<div class="panel">
+<form method="post" action="{{ url_for('client_new_submit') }}">
+  <label for="name">Name / Kürzel</label>
+  <input type="text" id="name" name="name" placeholder="z.B. beispiel-gmbh" required>
+
+  <label for="url">Domain oder Kontakt-/Standortseiten-URL</label>
+  <input type="url" id="url" name="url" placeholder="https://beispiel-gmbh.de" required>
+
+  <div class="actions">
+    <button type="submit">Discovery starten</button>
+    <a class="btn secondary" href="{{ url_for('index') }}">Abbrechen</a>
+  </div>
+</form>
+</div>
+<p class="muted">Die Website wird durchsucht und Standorte automatisch extrahiert - im nächsten Schritt kannst du das Ergebnis prüfen und anpassen, bevor etwas gespeichert wird.</p>
+{% endblock %}

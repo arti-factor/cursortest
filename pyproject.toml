@@ -21,6 +21,9 @@ dependencies = [
     "google-auth-oauthlib>=1.2",
     "tenacity>=8.2",
     "jinja2>=3.1",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +35,7 @@ dev = [
 
 [project.scripts]
 gbp-audit = "src.cli:app"
+gbp-audit-web = "src.webapp.main:run_dev_server"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}gbp-audit{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">gbp-audit</a>
+  <nav>
+    <a href="{{ url_for('index') }}">Mandanten</a>
+    <a href="{{ url_for('client_new_form') }}">+ Neuer Mandant</a>
+  </nav>
+</header>
+<main>
+  {% if flash_message %}
+  <div class="flash {{ flash_kind or 'info' }}">{{ flash_message }}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

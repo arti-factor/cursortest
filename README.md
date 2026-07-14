@@ -55,9 +55,22 @@ cp .env.example .env
 
 ### 3. OAuth + GBP-API-Quota (optional, für Modus B)
 
-1. In derselben Google-Cloud-Console unter **APIs & Dienste -> Zugangsdaten ->
-   Anmeldedaten erstellen -> OAuth-Client-ID** einen Client vom Typ
-   **"Desktop-App"** anlegen, das JSON herunterladen.
+Die CLI und die Webanwendung nutzen unterschiedliche OAuth-Client-Typen, da
+die Webanwendung eine Weiterleitungs-URI statt eines lokalen Browser-Popups
+braucht:
+
+- **Für die CLI** (`gbp-audit auth <kunde>`): OAuth-Client-ID vom Typ
+  **"Desktop-App"**.
+- **Für die Webanwendung** (Button "Modus B einrichten"): OAuth-Client-ID vom
+  Typ **"Web-Anwendung"** mit der Weiterleitungs-URI
+  `http://<host>:<port>/clients/<kunde>/auth/callback` (bei lokalem Testen
+  z.B. `http://127.0.0.1:8000/clients/beispiel-gmbh/auth/callback`).
+
+Schritte:
+
+1. In der Google Cloud Console unter **APIs & Dienste -> Zugangsdaten ->
+   Anmeldedaten erstellen -> OAuth-Client-ID** den passenden Client-Typ (siehe
+   oben) anlegen, JSON herunterladen.
 2. Pfad zur JSON-Datei in `.env` als `GOOGLE_OAUTH_CLIENT_SECRET_FILE`
    eintragen.
 3. Die Business-Profile-APIs (Account Management, Business Information,
@@ -65,10 +78,10 @@ cp .env.example .env
    muss über das offizielle
    [GBP-API-Antragsformular](https://developers.google.com/my-business/content/prereqs#request-access)
    beantragt werden (Google prüft manuell, das kann einige Tage dauern).
-4. Sobald der Zugriff freigeschaltet ist: `gbp-audit auth <kunde>` ausführen.
-   Das öffnet den OAuth-Consent-Flow im Browser und speichert den Token unter
-   `clients/<kunde>/token.json`. Ab dann läuft `gbp-audit run <kunde>`
-   automatisch im Modus B.
+4. Sobald der Zugriff freigeschaltet ist: `gbp-audit auth <kunde>` (CLI) oder
+   den Button "Modus B einrichten" auf der Mandanten-Seite (Webanwendung)
+   nutzen. Der Token wird unter `clients/<kunde>/token.json` gespeichert. Ab
+   dann laufen Audit-Läufe für diesen Mandanten automatisch im Modus B.
 
 Ohne Schritt 3/4 bleibt die App voll nutzbar - sie arbeitet dann dauerhaft im
 Modus A.
@@ -101,6 +114,62 @@ gbp-audit run <kunde>                                        # fetch + check + r
 gbp-audit run <kunde> --html                                 # zusätzlich HTML-Dashboard erzeugen
 gbp-audit diff <kunde> RUN1 RUN2                              # zwei Läufe vergleichen (Datumsordner unter runs/)
 ```
+
+## Webanwendung
+
+Neben der CLI gibt es eine eigenständige Webanwendung mit HTML-Oberfläche
+(FastAPI) - dieselbe Geschäftslogik, aber bedienbar über den Browser statt
+das Terminal. Gedacht zum Verlinken/Einbetten aus einer bestehenden
+Agenturverwaltung heraus (z.B. als Menüpunkt/Link oder in einem iframe), ganz
+ohne eigenes Login.
+
+### Starten
+
+```bash
+source .venv/bin/activate
+uvicorn src.webapp.main:app --host 0.0.0.0 --port 8000
+```
+
+Danach ist die Oberfläche unter `http://<server>:8000/` erreichbar. Für die
+lokale Entwicklung mit Autoreload: `uvicorn src.webapp.main:app --reload`.
+
+**In die Agenturverwaltung einbinden:** Da es sich um eine eigenständige
+Webanwendung handelt, reicht ein einfacher Link oder ein `<iframe>` auf die
+laufende Instanz, z.B.:
+
+```html
+<a href="https://gbp-audit.eure-domain.de/" target="_blank">GBP-Audit öffnen</a>
+<!-- oder eingebettet: -->
+<iframe src="https://gbp-audit.eure-domain.de/" style="width:100%; height:90vh; border:0;"></iframe>
+```
+
+Für den produktiven Betrieb hinter einem Reverse-Proxy (nginx/Apache/Caddy)
+der Agenturverwaltung reicht ein einfacher Proxy-Pass auf den uvicorn-Prozess
+(z.B. Port 8000) - eine gemeinsame Datenbank oder ein gemeinsames Login sind
+nicht nötig, da die Webanwendung komplett unabhängig läuft.
+
+### Bedienung
+
+- **Mandanten** (Startseite): Übersicht aller Kunden, "+ Neuer Mandant"
+- **Neuer Mandant**: Name + Domain/URL eingeben -> Discovery läuft im
+  Hintergrund -> Ergebnis zur Prüfung/Bearbeitung (Standorte korrigieren,
+  entfernen, manuell ergänzen) -> Speichern
+- **Mandanten-Seite**: Standortliste mit Zuordnungsstatus, Buttons für
+  "GBP-Matching starten" und "Audit-Lauf starten" (beides läuft als
+  Hintergrund-Job mit Live-Log), Linkliste vergangener Läufe, "Modus B
+  einrichten"
+- **Mehrdeutige Treffer**: falls das Matching mehrere mögliche
+  Google-Profile findet, erscheint eine Auswahlseite mit Kandidaten je
+  Standort
+- **Report-Ansicht**: eingebettetes HTML-Dashboard je Lauf + Download-Link
+  für den Excel-Report
+- **Läufe vergleichen**: zwei Läufe per Dropdown wählen, Score-Delta je
+  Standort
+
+Hintergrund-Jobs (Discovery/Matching/Audit-Lauf) laufen im Prozessspeicher
+des Webservers - bei einem Neustart des Servers gehen nur laufende
+Job-Status-Anzeigen verloren, nicht die bereits gespeicherten Standorte/
+Reports unter `clients/<kunde>/`.
 
 ## Typische Workflows
 
@@ -180,10 +249,11 @@ pytest
 
 Die Testsuite deckt Discovery (JSON-LD/Mikrodaten/Heuristik-Extraktion auf
 HTML-Fixtures, inkl. einem Fixture mit 55 Standorten), Matching (eindeutig/
-mehrdeutig/kein Treffer/Duplikat), den GBP-API-Client (Quota-Fehler, Pagination),
-alle zehn Check-Gruppen, Scoring/Renormalisierung sowie die Excel-/HTML-Reports
-ab - ohne echte Netzwerkaufrufe (HTTP wird über Fixtures/Fakes/Mock-Transports
-ersetzt).
+mehrdeutig/kein Treffer/Duplikat), den GBP-API-Client (Quota-Fehler, Pagination,
+OAuth-Web-Flow), alle zehn Check-Gruppen, Scoring/Renormalisierung, die
+Excel-/HTML-Reports sowie die Webanwendung (Routen/Weiterleitungen/Job-Status
+über FastAPIs TestClient) ab - ohne echte Netzwerkaufrufe (HTTP wird über
+Fixtures/Fakes/Mock-Transports ersetzt).
 
 ## Bekannte Einschränkungen
 

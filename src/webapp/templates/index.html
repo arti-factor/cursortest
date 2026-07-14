@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Mandanten - gbp-audit{% endblock %}
+{% block content %}
+<h1>Mandanten</h1>
+
+{% if not clients %}
+<div class="panel">
+  <p class="muted">Noch keine Mandanten angelegt.</p>
+  <a class="btn" href="{{ url_for('client_new_form') }}">+ Neuer Mandant</a>
+</div>
+{% else %}
+<div class="panel">
+<table>
+<thead>
+<tr><th>Mandant</th><th>Standorte</th><th>Letzter Lauf</th><th>Modus</th><th></th></tr>
+</thead>
+<tbody>
+{% for c in clients %}
+<tr>
+  <td><a href="{{ url_for('client_detail', slug=c.slug) }}">{{ c.slug }}</a></td>
+  <td>{{ c.anzahl_standorte }}</td>
+  <td>{{ c.letzter_lauf or "-" }}</td>
+  <td>{{ "B" if c.modus_b else "A" }}</td>
+  <td><a class="btn secondary" href="{{ url_for('client_detail', slug=c.slug) }}">Öffnen</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<a class="btn" href="{{ url_for('client_new_form') }}">+ Neuer Mandant</a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Mehrdeutige Treffer - gbp-audit{% endblock %}
+{% block content %}
+<h1>Mehrdeutige Treffer klären: {{ slug }}</h1>
+<p class="muted">Für die folgenden Standorte gibt es mehrere mögliche Google-Unternehmensprofile. Bitte den richtigen auswählen (oder "Kein Treffer", falls keiner passt).</p>
+
+<form method="post" action="{{ url_for('match_review_submit', slug=slug) }}">
+<input type="hidden" name="job_id" value="{{ job_id }}">
+
+{% for amb in ambiguous %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ amb.location_name }} <span class="muted">({{ amb.location_address }})</span></h2>
+  <table>
+  <thead><tr><th style="width:2rem"></th><th>Name</th><th>Adresse</th><th>Konfidenz</th></tr></thead>
+  <tbody>
+  {% for cand in amb.candidates %}
+  <tr>
+    <td><input type="radio" name="choice_{{ amb.location_id }}" value="{{ cand.place.id }}" {{ "checked" if loop.first }}></td>
+    <td>{{ cand.place.displayName.text if cand.place.displayName else "" }}</td>
+    <td>{{ cand.place.formattedAddress or "" }}</td>
+    <td>{{ "%.0f"|format(cand.confidence) }}%</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td><input type="radio" name="choice_{{ amb.location_id }}" value=""></td>
+    <td colspan="3" class="muted">Kein Treffer / keiner davon korrekt</td>
+  </tr>
+  </tbody>
+  </table>
+</div>
+{% endfor %}
+
+<div class="actions">
+  <button type="submit">Auswahl übernehmen</button>
+  <a class="btn secondary" href="{{ url_for('client_detail', slug=slug) }}">Abbrechen</a>
+</div>
+</form>
+{% endblock %}

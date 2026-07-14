@@ -24,7 +24,7 @@ from typing import Any, Iterator, Optional
 import httpx
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 
@@ -60,6 +60,27 @@ def run_oauth_flow(client_secret_file: str, scopes: list[str], token_path: Path)
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(creds.to_json(), encoding="utf-8")
     return creds
+
+
+def build_web_oauth_flow(client_secret_file: str, scopes: list[str], redirect_uri: str) -> Flow:
+    """Baut einen Redirect-basierten OAuth-Flow für die Webanwendung auf.
+
+    Anders als der Desktop-Flow (run_oauth_flow) öffnet dieser keinen lokalen
+    Server, sondern liefert eine Autorisierungs-URL, zu der der Browser
+    weitergeleitet wird; Google leitet danach zu redirect_uri zurück.
+    Erfordert in der Google Cloud Console eine OAuth-Client-ID vom Typ
+    "Web-Anwendung" (nicht "Desktop-App") mit redirect_uri als eingetragener
+    Weiterleitungs-URI.
+    """
+    if not client_secret_file or not Path(client_secret_file).exists():
+        raise GbpApiError(
+            "Keine gültige OAuth-Client-Secret-Datei gefunden. In der Google Cloud "
+            "Console unter 'APIs & Dienste -> Zugangsdaten' eine OAuth-Client-ID vom "
+            "Typ 'Web-Anwendung' anlegen (Weiterleitungs-URI wie unten angegeben "
+            "eintragen), JSON herunterladen und den Pfad in "
+            "GOOGLE_OAUTH_CLIENT_SECRET_FILE (.env) eintragen."
+        )
+    return Flow.from_client_secrets_file(client_secret_file, scopes=scopes, redirect_uri=redirect_uri)
 
 
 def load_credentials(token_path: Path, scopes: list[str]) -> Credentials:

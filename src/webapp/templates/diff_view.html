@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Läufe vergleichen - gbp-audit{% endblock %}
+{% block content %}
+<h1>Läufe vergleichen: {{ slug }}</h1>
+
+<div class="panel">
+<form method="get" action="{{ url_for('diff_form', slug=slug) }}">
+  <div class="grid-2">
+    <div>
+      <label for="run1">Lauf 1 (älter)</label>
+      <select id="run1" name="run1">
+        {% for r in runs %}
+        <option value="{{ r }}" {{ "selected" if r == run1 }}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="run2">Lauf 2 (neuer)</label>
+      <select id="run2" name="run2">
+        {% for r in runs %}
+        <option value="{{ r }}" {{ "selected" if r == run2 }}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit">Vergleichen</button>
+  </div>
+</form>
+</div>
+
+{% if rows is not none %}
+<div class="panel">
+<table>
+<thead><tr><th>Standort</th><th>Score {{ run1 }}</th><th>Score {{ run2 }}</th><th>Delta</th></tr></thead>
+<tbody>
+{% for row in rows %}
+<tr>
+  <td>{{ row.location_name }}</td>
+  <td>{{ row.score_alt if row.score_alt is not none else "n/a" }}</td>
+  <td>{{ row.score_neu if row.score_neu is not none else "n/a" }}</td>
+  <td>{{ "%+.1f"|format(row.delta) if row.delta is not none else "n/a" }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

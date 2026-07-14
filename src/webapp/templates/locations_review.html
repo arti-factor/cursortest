@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Standorte prüfen - gbp-audit{% endblock %}
+{% block content %}
+<h1>Standorte prüfen: {{ slug }}</h1>
+<p class="muted">Bitte die gefundenen Standorte prüfen, bei Bedarf korrigieren, nicht benötigte entfernen oder fehlende manuell ergänzen. Erst nach dem Speichern werden sie für Matching/Audit verwendet.</p>
+
+<form method="post" action="{{ url_for('locations_review_submit', slug=slug) }}">
+<div class="panel">
+<table id="loc-table">
+<thead>
+<tr>
+  <th style="width:2rem"></th>
+  <th>Name</th>
+  <th>Straße</th>
+  <th>PLZ</th>
+  <th>Ort</th>
+  <th>Telefon</th>
+  <th>Website</th>
+</tr>
+</thead>
+<tbody>
+{% for loc in locations %}
+<tr data-idx="{{ loop.index0 }}">
+  <td><span class="row-remove" onclick="removeRow(this)">✕</span>
+    <input type="hidden" name="loc_{{ loop.index0 }}_removed" value="">
+    <input type="hidden" name="loc_{{ loop.index0 }}_source_url" value="{{ loc.source_url }}">
+    <input type="hidden" name="loc_{{ loop.index0 }}_extraction_method" value="{{ loc.extraction_method }}">
+  </td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_name" value="{{ loc.name }}"></td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_street" value="{{ loc.street }}"></td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_zip" value="{{ loc.zip }}" style="width:5.5rem"></td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_city" value="{{ loc.city }}"></td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_phone" value="{{ loc.phone }}"></td>
+  <td><input type="text" name="loc_{{ loop.index0 }}_website" value="{{ loc.website }}"></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<div class="actions">
+  <button type="button" class="btn secondary" onclick="addRow()">+ Standort manuell ergänzen</button>
+</div>
+<div class="actions">
+  <button type="submit">Standorte speichern</button>
+  <a class="btn secondary" href="{{ url_for('client_detail', slug=slug) }}">Abbrechen</a>
+</div>
+</form>
+
+<script>
+let nextIdx = {{ locations|length }};
+
+function removeRow(el) {
+  const tr = el.closest("tr");
+  tr.style.display = "none";
+  tr.querySelector("input[name$='_removed']").value = "1";
+}
+
+function addRow() {
+  const tbody = document.querySelector("#loc-table tbody");
+  const i = nextIdx++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><span class="row-remove" onclick="removeRow(this)">✕</span>
+      <input type="hidden" name="loc_${i}_removed" value="">
+      <input type="hidden" name="loc_${i}_source_url" value="">
+      <input type="hidden" name="loc_${i}_extraction_method" value="manuell">
+      <input type="hidden" name="loc_${i}_manuell" value="1">
+    </td>
+    <td><input type="text" name="loc_${i}_name"></td>
+    <td><input type="text" name="loc_${i}_street"></td>
+    <td><input type="text" name="loc_${i}_zip" style="width:5.5rem"></td>
+    <td><input type="text" name="loc_${i}_city"></td>
+    <td><input type="text" name="loc_${i}_phone"></td>
+    <td><input type="text" name="loc_${i}_website"></td>
+  `;
+  tbody.appendChild(tr);
+}
+</script>
+{% endblock %}

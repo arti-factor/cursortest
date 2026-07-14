@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Report {{ run_date }} - gbp-audit{% endblock %}
+{% block content %}
+<h1>Report: {{ slug }} ({{ run_date }})</h1>
+
+<div class="actions">
+  <a class="btn" href="{{ url_for('report_download_xlsx', slug=slug, run_date=run_date) }}">Excel-Report herunterladen</a>
+  <a class="btn secondary" href="{{ url_for('client_detail', slug=slug) }}">Zurück zum Mandanten</a>
+</div>
+
+{% if has_dashboard %}
+<div class="panel" style="padding:0; overflow:hidden;">
+  <iframe src="{{ url_for('report_dashboard_html', slug=slug, run_date=run_date) }}"
+          style="width:100%; height:80vh; border:0;"></iframe>
+</div>
+{% else %}
+<div class="panel">
+  <p class="muted">Für diesen Lauf wurde kein HTML-Dashboard erzeugt - nur der Excel-Report steht zur Verfügung.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Vorgang läuft - gbp-audit{% endblock %}
+{% block content %}
+{% if job.status == "running" %}
+<meta http-equiv="refresh" content="2">
+{% elif job.status == "done" and redirect_url %}
+<meta http-equiv="refresh" content="1;url={{ redirect_url }}">
+{% endif %}
+
+<h1>
+  {% if job.kind == "discover" %}Standorte werden erkannt{% endif %}
+  {% if job.kind == "match" %}Google-Unternehmensprofile werden gesucht{% endif %}
+  {% if job.kind == "run" %}Audit läuft{% endif %}
+</h1>
+
+<div class="panel">
+  <p>
+    Status:
+    {% if job.status == "running" %}<span class="badge gelb">läuft...</span>{% endif %}
+    {% if job.status == "done" %}<span class="badge gruen">fertig</span>{% endif %}
+    {% if job.status == "error" %}<span class="badge rot">Fehler</span>{% endif %}
+  </p>
+
+  {% if job.log %}
+  <pre class="log">{% for line in job.log %}{{ line }}
+{% endfor %}</pre>
+  {% endif %}
+
+  {% if job.status == "error" %}
+  <div class="flash error">{{ job.error }}</div>
+  <a class="btn secondary" href="{{ url_for('client_detail', slug=slug) if slug else url_for('index') }}">Zurück</a>
+  {% elif job.status == "done" %}
+  {% if redirect_url %}
+  <p class="muted">Weiter geht's automatisch... falls nicht: <a href="{{ redirect_url }}">hier klicken</a>.</p>
+  {% else %}
+  <a class="btn" href="{{ url_for('client_detail', slug=slug) if slug else url_for('index') }}">Weiter</a>
+  {% endif %}
+  {% else %}
+  <p class="muted">Diese Seite aktualisiert sich automatisch.</p>
+  {% endif %}
+</div>
+{% endblock %}
