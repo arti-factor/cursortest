@@ -49,18 +49,22 @@ matching:
     website_domain: 0.1
 
 # --- Scoring / Gewichte je Kriteriengruppe (müssen in Summe 100 ergeben) ---
+# Mit Einführung der Verzeichnis-Konsistenz (10%) wurden die übrigen Gewichte
+# proportional um den Faktor 0.9 reduziert, damit die Summe 100 bleibt. Frei
+# anpassbar - z.B. hier oder in clients/<kunde>/config.yaml überschreibbar.
 scoring:
   group_weights:
-    existenz_auffindbarkeit: 10
-    basisdaten_nap: 15
-    kategorien: 10
-    oeffnungszeiten: 10
-    beschreibung_attribute: 10
-    fotos: 10
-    bewertungen: 15
-    qna: 5
-    leistungen: 5
-    performance: 10
+    existenz_auffindbarkeit: 9
+    basisdaten_nap: 13.5
+    kategorien: 9
+    oeffnungszeiten: 9
+    beschreibung_attribute: 9
+    fotos: 9
+    bewertungen: 13.5
+    qna: 4.5
+    leistungen: 4.5
+    performance: 9
+    verzeichnis_konsistenz: 10
   ampel:
     gruen_ab: 85
     gelb_ab: 60 # darunter = rot
@@ -100,6 +104,58 @@ places_api:
     - "photos"
   max_retries: 5
   backoff_base_seconds: 1.0
+
+# --- Verzeichnis-Portale (Verzeichnis-Konsistenz) ---
+# 3 Portale mit offizieller Such-API (automatisch geprüft); alle anderen
+# Portale haben keine öffentliche API und werden per Bookmarklet manuell
+# erfasst (siehe src/portals.py für die vollständige Liste).
+foursquare_api:
+  base_url: "https://api.foursquare.com/v3/places"
+  max_retries: 5
+  backoff_base_seconds: 1.0
+
+yelp_api:
+  base_url: "https://api.yelp.com/v3"
+  max_retries: 5
+  backoff_base_seconds: 1.0
+
+# Portale ohne öffentliche Such-API - werden per Bookmarklet manuell erfasst.
+# such_url_vorlage: {name}/{ort} werden durch den jeweiligen Standort ersetzt.
+# WICHTIG: Diese URL-Muster sind bestmöglich recherchiert, aber Verzeichnisse
+# ändern ihre Such-URLs gelegentlich ohne Vorankündigung - bitte bei der
+# ersten Nutzung je Portal einmal stichprobenartig prüfen und hier anpassen,
+# falls die URL nicht mehr zur echten Suchergebnisseite führt. Für Portale,
+# deren genaues URL-Schema unsicher ist, wird eine auf die Domain eingeschränkte
+# Google-Suche als robuster Fallback verwendet.
+verzeichnis_portale:
+  bookmarklet_portale:
+    bing_places:
+      label: "Bing Places for Business"
+      such_url_vorlage: "https://www.bing.com/maps?q={name}+{ort}"
+    apple_business_connect:
+      label: "Apple Business Connect (Apple Maps)"
+      such_url_vorlage: "https://maps.apple.com/?q={name}+{ort}"
+    das_oertliche:
+      label: "Das Örtliche"
+      such_url_vorlage: "https://www.dasoertliche.de/Suche/{name}/{ort}"
+    gelbe_seiten:
+      label: "Gelbe Seiten"
+      such_url_vorlage: "https://www.gelbeseiten.de/Suche/{name}/{ort}"
+    wer_liefert_was:
+      label: "Wer liefert was"
+      such_url_vorlage: "https://www.google.com/search?q=site:wlw.de+%22{name}%22+{ort}"
+    elfhundertachtzig:
+      label: "11880.com"
+      such_url_vorlage: "https://www.google.com/search?q=site:11880.com+%22{name}%22+{ort}"
+    branchenbuch_deutschland:
+      label: "Branchenbuch Deutschland"
+      such_url_vorlage: "https://www.google.com/search?q=site:branchenbuch-deutschland.de+%22{name}%22+{ort}"
+    cylex:
+      label: "Cylex"
+      such_url_vorlage: "https://www.google.com/search?q=site:cylex.de+%22{name}%22+{ort}"
+    meinestadt:
+      label: "meinestadt.de"
+      such_url_vorlage: "https://www.google.com/search?q=site:meinestadt.de+%22{name}%22+{ort}"
 
 # --- GBP APIs (Modus B, nur bei eingerichtetem OAuth) ---
 gbp_api:

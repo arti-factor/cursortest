@@ -29,6 +29,19 @@ class MatchStatus(str, Enum):
     KEIN_TREFFER = "kein_treffer"
 
 
+class PortalCheckType(str, Enum):
+    API = "api"  # automatisch per offizieller API geprüft (Foursquare, Yelp, ...)
+    BOOKMARKLET = "bookmarklet"  # manuell erfasst über das Bookmarklet
+
+
+class PortalCheckStatus(str, Enum):
+    NICHT_GEPRUEFT = "nicht_geprueft"  # noch nie geprüft
+    GEFUNDEN_NAP_OK = "gefunden_nap_ok"
+    GEFUNDEN_NAP_ABWEICHUNG = "gefunden_nap_abweichung"
+    GEFUNDEN_NICHT_EINDEUTIG = "gefunden_nicht_eindeutig"  # erfasst, aber Abgleich unklar -> manuell prüfen
+    NICHT_VORHANDEN = "nicht_vorhanden"  # kein Eintrag auf dem Portal
+
+
 @dataclass
 class Location:
     """Ein aus der Kunden-Website extrahierter Standort."""
@@ -150,3 +163,33 @@ class ClientRun:
     run_date: str
     modus: Modus
     results: list[LocationAuditResult] = field(default_factory=list)
+
+
+@dataclass
+class PortalCheck:
+    """Prüfergebnis eines Standorts auf einem externen Verzeichnis-Portal
+    (Bing Places, Gelbe Seiten, Foursquare, ...) - unabhängig vom monatlichen
+    GBP-Audit-Lauf, nur bei Bedarf manuell ausgelöst."""
+
+    standort_id: str
+    portal_id: str
+    status: PortalCheckStatus = PortalCheckStatus.NICHT_GEPRUEFT
+    erfasster_text: str = ""  # Rohtext bei Bookmarklet-Erfassung
+    quelladresse: str = ""
+    zeitstempel: str = ""  # ISO 8601
+    # Bei API-Portalen (Foursquare/Yelp) strukturiert statt Rohtext:
+    gefundener_name: str = ""
+    gefundene_adresse: str = ""
+    gefundenes_telefon: str = ""
+    aehnlichkeit_prozent: Optional[float] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["status"] = self.status.value
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "PortalCheck":
+        d = dict(d)
+        d["status"] = PortalCheckStatus(d.get("status", "nicht_geprueft"))
+        return cls(**d)

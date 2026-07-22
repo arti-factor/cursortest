@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from src.models import CheckResult, CheckStatus, GbpProfile, Location, Modus
+from src.models import CheckResult, CheckStatus, GbpProfile, Location, Modus, PortalCheck
 
 
 @dataclass
@@ -23,6 +23,7 @@ class CheckContext:
     all_locations: list[Location] = field(default_factory=list)
     all_profiles: dict[str, Optional[GbpProfile]] = field(default_factory=dict)
     previous_profile: Optional[GbpProfile] = None  # für Re-Audit-Deltas (Gruppe 9)
+    portal_checks: list[PortalCheck] = field(default_factory=list)  # Verzeichnis-Konsistenz (Gruppe 10)
 
     @property
     def is_multi_location(self) -> bool:

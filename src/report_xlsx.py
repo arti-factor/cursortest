@@ -43,6 +43,7 @@ _GRUPPEN_LABELS = {
     "qna": "Q&A",
     "leistungen": "Leistungen und Produkte",
     "performance": "Performance-Baseline",
+    "verzeichnis_konsistenz": "Verzeichnis-Konsistenz",
 }
 
 _MODUS_B_GRUPPEN = ("beschreibung_attribute", "qna", "leistungen", "performance")

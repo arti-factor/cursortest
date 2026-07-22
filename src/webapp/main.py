@@ -14,19 +14,28 @@ from __future__ import annotations
 
 import os
 import re
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-from urllib.parse import urlencode
+from typing import Any, Optional
+from urllib.parse import quote, urlencode
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
+from src.api_foursquare import FoursquareApiError, FoursquareClient, foursquare_result_to_nap
 from src.api_gbp import GbpApiError, build_web_oauth_flow
 from src.api_places import PlacesApiError
-from src.models import Location
+from src.api_yelp import YelpApiError, YelpClient, yelp_result_to_nap
+from src.discovery import extract_nap_from_text
+from src.matching import nap_similarity
+from src.models import Location, PortalCheck, PortalCheckStatus, PortalCheckType
+from src.portals import all_portals, build_search_url
 from src.services import (
     discover_for_client,
     match_all_locations,
@@ -43,6 +52,17 @@ BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="gbp-audit")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+# Der Bookmarklet-Capture-Fetch läuft im Ursprung des jeweiligen Verzeichnis-Portals
+# (z.B. gelbeseiten.de), nicht auf unserer eigenen Domain - dafür ist permissives
+# CORS auf dieser einen Schnittstelle nötig. Es werden keine Cookies/Zugangsdaten
+# übertragen, daher ist ein offener Origin hier unbedenklich.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # state -> client-slug, für den OAuth-Web-Flow (siehe unten). In-Memory reicht,
@@ -435,6 +455,289 @@ def diff_form(request: Request, slug: str, run1: Optional[str] = None, run2: Opt
             )
 
     return render(request, "diff_view.html", slug=slug, runs=runs, run1=run1, run2=run2, rows=rows)
+
+
+# --- Verzeichnis-Konsistenz (Google + Foursquare/Yelp automatisch, Rest per Bookmarklet) ---
+
+# Bewusst ein einziger, serverweiter "aktiver Vorgang" statt einer Cookie-/Token-
+# basierten Sitzung je Browser: ein Cookie-Ansatz würde HTTPS voraussetzen
+# (SameSite=None erfordert Secure), was für den lokalen Entwicklungsbetrieb nicht
+# gegeben ist. Für ein internes Tool ohne Login, das ohnehin einen Standort/ein
+# Portal nach dem anderen prüft, ist diese Vereinfachung ausreichend - bei
+# gleichzeitiger Nutzung durch mehrere Personen könnten sich Prüfungen
+# überschneiden (siehe README, Abschnitt "Verzeichnis-Konsistenz").
+_active_capture: Optional[dict[str, Any]] = None
+_ACTIVE_CAPTURE_TTL_SECONDS = 900
+
+PORTAL_STATUS_LABEL = {
+    "nicht_geprueft": "nicht geprüft",
+    "gefunden_nap_ok": "gefunden, NAP korrekt",
+    "gefunden_nap_abweichung": "gefunden, NAP weicht ab",
+    "gefunden_nicht_eindeutig": "erfasst, manuell prüfen",
+    "nicht_vorhanden": "kein Eintrag vorhanden",
+}
+PORTAL_STATUS_BADGE = {
+    "nicht_geprueft": "na",
+    "gefunden_nap_ok": "gruen",
+    "gefunden_nap_abweichung": "gelb",
+    "gefunden_nicht_eindeutig": "gelb",
+    "nicht_vorhanden": "rot",
+}
+
+
+def _build_bookmarklet_href(api_base: str) -> str:
+    source = (BASE_DIR / "static" / "bookmarklet_source.js").read_text(encoding="utf-8")
+    source = source.replace("%%API_BASE%%", api_base)
+    compact = re.sub(r"\s+", " ", source).strip()
+    return "javascript:" + quote(compact)
+
+
+@app.get("/clients/{slug}/portale", response_class=HTMLResponse, name="portale_view")
+def portale_view(request: Request, slug: str):
+    try:
+        client = _require_client(slug)
+    except LookupError as exc:
+        return redirect_with_flash(str(request.url_for("index")), str(exc), "error")
+
+    config = client.load_config()
+    locations = client.load_locations()
+    portale = all_portals(config)
+    checks_by_key = {(c.standort_id, c.portal_id): c for c in client.load_portal_checks()}
+
+    matrix = []
+    for loc in locations:
+        zeile = []
+        for portal in portale:
+            check = checks_by_key.get((loc.id, portal.id))
+            status = check.status.value if check else "nicht_geprueft"
+            zeile.append(
+                {
+                    "portal": portal,
+                    "status": status,
+                    "status_label": PORTAL_STATUS_LABEL.get(status, status),
+                    "badge": PORTAL_STATUS_BADGE.get(status, "na"),
+                    "check": check,
+                }
+            )
+        matrix.append({"location": loc, "zeile": zeile})
+
+    bookmarklet_href = _build_bookmarklet_href(str(request.base_url).rstrip("/"))
+
+    return render(
+        request,
+        "portale_view.html",
+        slug=slug,
+        matrix=matrix,
+        portale=portale,
+        bookmarklet_href=bookmarklet_href,
+    )
+
+
+@app.post("/clients/{slug}/portale/{standort_id}/{portal_id}/pruefen", name="portal_pruefen_start")
+def portal_pruefen_start(request: Request, slug: str, standort_id: str, portal_id: str):
+    global _active_capture
+    try:
+        client = _require_client(slug)
+    except LookupError as exc:
+        return redirect_with_flash(str(request.url_for("index")), str(exc), "error")
+
+    portale_url = str(request.url_for("portale_view", slug=slug))
+    locations = {loc.id: loc for loc in client.load_locations()}
+    location = locations.get(standort_id)
+    if location is None:
+        return redirect_with_flash(portale_url, "Standort nicht gefunden.", "error")
+
+    config = client.load_config()
+    try:
+        such_url = build_search_url(portal_id, location.name, location.city, config)
+    except ValueError as exc:
+        return redirect_with_flash(portale_url, str(exc), "error")
+
+    _active_capture = {
+        "slug": slug,
+        "standort_id": standort_id,
+        "portal_id": portal_id,
+        "gestartet_um": time.time(),
+    }
+    return RedirectResponse(such_url, status_code=303)
+
+
+@app.post("/clients/{slug}/portale/{standort_id}/{portal_id}/pruefen-api", name="portal_pruefen_api")
+def portal_pruefen_api(request: Request, slug: str, standort_id: str, portal_id: str):
+    try:
+        client = _require_client(slug)
+    except LookupError as exc:
+        return redirect_with_flash(str(request.url_for("index")), str(exc), "error")
+
+    locations = {loc.id: loc for loc in client.load_locations()}
+    location = locations.get(standort_id)
+    portale_url = str(request.url_for("portale_view", slug=slug))
+    if location is None:
+        return redirect_with_flash(portale_url, "Standort nicht gefunden.", "error")
+
+    config = client.load_config()
+    try:
+        if portal_id == "foursquare":
+            api_key = os.environ.get("FOURSQUARE_API_KEY", "")
+            with FoursquareClient(api_key, config["foursquare_api"]) as fs:
+                treffer = [foursquare_result_to_nap(r) for r in fs.search(location.name, location.city)]
+        elif portal_id == "yelp":
+            api_key = os.environ.get("YELP_API_KEY", "")
+            with YelpClient(api_key, config["yelp_api"]) as yelp:
+                treffer = [yelp_result_to_nap(r) for r in yelp.search(location.name, location.city)]
+        else:
+            return redirect_with_flash(portale_url, f"Unbekanntes API-Portal '{portal_id}'.", "error")
+    except (FoursquareApiError, YelpApiError) as exc:
+        return redirect_with_flash(portale_url, str(exc), "error")
+
+    now = datetime.now(timezone.utc).isoformat()
+    if not treffer:
+        check = PortalCheck(
+            standort_id=location.id, portal_id=portal_id, status=PortalCheckStatus.NICHT_VORHANDEN, zeitstempel=now
+        )
+    else:
+        weights = config["matching"]["weights"]
+        bewertet = sorted(
+            (
+                (nap_similarity(location, r["name"], r["address"], r["phone"], r["website"], weights), r)
+                for r in treffer
+            ),
+            key=lambda paar: paar[0]["confidence"],
+            reverse=True,
+        )
+        scores, best = bewertet[0]
+        schwelle = config["matching"]["auto_accept_threshold"]
+        status = (
+            PortalCheckStatus.GEFUNDEN_NAP_OK
+            if scores["confidence"] >= schwelle
+            else PortalCheckStatus.GEFUNDEN_NAP_ABWEICHUNG
+        )
+        check = PortalCheck(
+            standort_id=location.id,
+            portal_id=portal_id,
+            status=status,
+            zeitstempel=now,
+            gefundener_name=best["name"],
+            gefundene_adresse=best["address"],
+            gefundenes_telefon=best["phone"],
+            aehnlichkeit_prozent=scores["confidence"],
+        )
+
+    client.upsert_portal_check(check)
+    return redirect_with_flash(portale_url, f"{portal_id}: {PORTAL_STATUS_LABEL[check.status.value]}", "success")
+
+
+class PortalCaptureSubmission(BaseModel):
+    action: str  # "uebernehmen" | "kein_eintrag"
+    selected_text: str = ""
+    source_url: str = ""
+
+
+def _bewerte_erfassten_text(location: Location, text: str, config: dict[str, Any]) -> tuple[PortalCheckStatus, dict[str, str], Optional[float]]:
+    nap = extract_nap_from_text(text)
+    if not any(nap.values()):
+        return PortalCheckStatus.GEFUNDEN_NICHT_EINDEUTIG, nap, None
+
+    candidate_address = f"{nap['street']} {nap['zip']} {nap['city']}".strip()
+    scores = nap_similarity(location, nap["name"], candidate_address, nap["phone"], "", config["matching"]["weights"])
+    schwelle = config["matching"]["auto_accept_threshold"]
+    status = PortalCheckStatus.GEFUNDEN_NAP_OK if scores["confidence"] >= schwelle else PortalCheckStatus.GEFUNDEN_NAP_ABWEICHUNG
+    return status, nap, scores["confidence"]
+
+
+@app.post("/api/portal-capture/submit", name="portal_capture_submit")
+def portal_capture_submit(payload: PortalCaptureSubmission):
+    global _active_capture
+
+    if _active_capture is None or (time.time() - _active_capture["gestartet_um"]) > _ACTIVE_CAPTURE_TTL_SECONDS:
+        raise HTTPException(
+            status_code=409,
+            detail="Keine aktive Prüfung gefunden. Bitte in der App erneut auf 'Prüfen' klicken.",
+        )
+
+    kontext = _active_capture
+    _active_capture = None  # verbrauchen, damit derselbe Vorgang nicht doppelt zugeordnet wird
+
+    client = get_client(kontext["slug"])
+    locations = {loc.id: loc for loc in client.load_locations()}
+    location = locations.get(kontext["standort_id"])
+    if location is None:
+        raise HTTPException(status_code=404, detail="Standort nicht gefunden.")
+
+    config = client.load_config()
+    now = datetime.now(timezone.utc).isoformat()
+
+    if payload.action == "kein_eintrag":
+        check = PortalCheck(
+            standort_id=location.id,
+            portal_id=kontext["portal_id"],
+            status=PortalCheckStatus.NICHT_VORHANDEN,
+            quelladresse=payload.source_url,
+            zeitstempel=now,
+        )
+        client.upsert_portal_check(check)
+        return {"status_label": PORTAL_STATUS_LABEL[check.status.value]}
+
+    status, nap, aehnlichkeit = _bewerte_erfassten_text(location, payload.selected_text, config)
+    check = PortalCheck(
+        standort_id=location.id,
+        portal_id=kontext["portal_id"],
+        status=status,
+        erfasster_text=payload.selected_text,
+        quelladresse=payload.source_url,
+        zeitstempel=now,
+        gefundener_name=nap.get("name", ""),
+        gefundene_adresse=f"{nap.get('street', '')} {nap.get('zip', '')} {nap.get('city', '')}".strip(),
+        gefundenes_telefon=nap.get("phone", ""),
+        aehnlichkeit_prozent=aehnlichkeit,
+    )
+    client.upsert_portal_check(check)
+    return {"status_label": PORTAL_STATUS_LABEL[check.status.value]}
+
+
+@app.post("/clients/{slug}/portale/{standort_id}/{portal_id}/manuell", name="portal_manuell_submit")
+def portal_manuell_submit(
+    request: Request,
+    slug: str,
+    standort_id: str,
+    portal_id: str,
+    erfasster_text: str = Form(""),
+    kein_eintrag: Optional[str] = Form(None),
+):
+    try:
+        client = _require_client(slug)
+    except LookupError as exc:
+        return redirect_with_flash(str(request.url_for("index")), str(exc), "error")
+
+    locations = {loc.id: loc for loc in client.load_locations()}
+    location = locations.get(standort_id)
+    portale_url = str(request.url_for("portale_view", slug=slug))
+    if location is None:
+        return redirect_with_flash(portale_url, "Standort nicht gefunden.", "error")
+
+    config = client.load_config()
+    now = datetime.now(timezone.utc).isoformat()
+
+    if kein_eintrag:
+        check = PortalCheck(
+            standort_id=location.id, portal_id=portal_id, status=PortalCheckStatus.NICHT_VORHANDEN, zeitstempel=now
+        )
+    else:
+        status, nap, aehnlichkeit = _bewerte_erfassten_text(location, erfasster_text, config)
+        check = PortalCheck(
+            standort_id=location.id,
+            portal_id=portal_id,
+            status=status,
+            erfasster_text=erfasster_text,
+            zeitstempel=now,
+            gefundener_name=nap.get("name", ""),
+            gefundene_adresse=f"{nap.get('street', '')} {nap.get('zip', '')} {nap.get('city', '')}".strip(),
+            gefundenes_telefon=nap.get("phone", ""),
+            aehnlichkeit_prozent=aehnlichkeit,
+        )
+
+    client.upsert_portal_check(check)
+    return redirect_with_flash(portale_url, f"{portal_id}: {PORTAL_STATUS_LABEL[check.status.value]}", "success")
 
 
 # --- Modus B: OAuth-Web-Flow ---

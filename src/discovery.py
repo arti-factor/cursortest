@@ -334,6 +334,47 @@ def extract_locations_from_html(html: str, url: str) -> list[Location]:
     return extract_heuristic_locations(html, url)
 
 
+def extract_nap_from_text(text: str) -> dict[str, str]:
+    """Extrahiert Name/Straße/PLZ/Ort/Telefon aus einem beliebigen Rohtext-Ausschnitt.
+
+    Für die Bookmarklet-Erfassung: der Nutzer markiert einen NAP-Ausschnitt auf
+    einem Verzeichnis-Portal (Freitext, kein HTML) - dieselben Heuristiken wie
+    bei der Website-Discovery kommen hier für einen einzelnen Datensatz statt
+    einer Liste von Standorten zum Einsatz.
+    """
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+    normalized = "\n".join(line for line in lines if line)
+    if not normalized:
+        return {"name": "", "street": "", "zip": "", "city": "", "phone": ""}
+
+    ergebnis = {"name": "", "street": "", "zip": "", "city": "", "phone": ""}
+
+    m = _PLZ_ORT_RE.search(normalized)
+    if m:
+        ergebnis["zip"] = m.group("zip")
+        ergebnis["city"] = _clean_text(m.group("city"))
+        window_start = max(0, m.start() - 120)
+        window = normalized[window_start : m.end() + 40]
+        street_match = _STREET_RE.search(window)
+        ergebnis["street"] = (
+            _clean_text(street_match.group("street"))
+            if street_match
+            else _street_fallback_from_context(normalized, m.start())
+        )
+
+    phone_match = _PHONE_RE.search(normalized)
+    if phone_match:
+        ergebnis["phone"] = _normalize_phone(phone_match.group("phone"))
+
+    for line in lines:
+        if _PLZ_ORT_RE.search(line) or _PHONE_RE.search(line) or _STREET_RE.search(line):
+            continue
+        ergebnis["name"] = line
+        break
+
+    return ergebnis
+
+
 def _normalize_street(street: str) -> str:
     return re.sub(r"\s+", " ", street or "").strip().lower()
 

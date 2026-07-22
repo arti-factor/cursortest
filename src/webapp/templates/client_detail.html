@@ -47,6 +47,7 @@
       <button type="submit" {{ "disabled" if not has_locations }}>Audit-Lauf starten</button>
     </form>
     <a class="btn secondary" href="{{ url_for('diff_form', slug=slug) }}">Läufe vergleichen</a>
+    <a class="btn secondary" href="{{ url_for('portale_view', slug=slug) }}">Verzeichnisse prüfen</a>
   </div>
 </div>
 

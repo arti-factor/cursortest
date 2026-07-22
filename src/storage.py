@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import yaml
 
-from src.models import Location
+from src.models import Location, PortalCheck
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GLOBAL_CONFIG_PATH = REPO_ROOT / "config.yaml"
@@ -53,6 +53,7 @@ class ClientDirs:
         self.root = clients_dir() / slug
         self.config_path = self.root / "config.yaml"
         self.locations_path = self.root / "locations.yaml"
+        self.portale_path = self.root / "portale.yaml"
         self.token_path = self.root / "token.json"
         self.runs_dir = self.root / "runs"
         self.output_dir = self.root / "output"
@@ -101,6 +102,29 @@ class ClientDirs:
         data = [loc.to_dict() for loc in locations]
         with open(self.locations_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+
+    def load_portal_checks(self) -> list[PortalCheck]:
+        """Prüfergebnisse der Verzeichnis-Konsistenz - unabhängig von runs/,
+        da diese Prüfung nicht am monatlichen Audit-Zyklus hängt."""
+        if not self.portale_path.exists():
+            return []
+        with open(self.portale_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or []
+        return [PortalCheck.from_dict(item) for item in data]
+
+    def save_portal_checks(self, checks: list[PortalCheck]) -> None:
+        self.ensure()
+        data = [c.to_dict() for c in checks]
+        with open(self.portale_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+
+    def upsert_portal_check(self, check: PortalCheck) -> None:
+        """Ersetzt den bestehenden Eintrag für (standort_id, portal_id), falls
+        vorhanden, sonst fügt ihn hinzu - und speichert sofort."""
+        checks = self.load_portal_checks()
+        checks = [c for c in checks if not (c.standort_id == check.standort_id and c.portal_id == check.portal_id)]
+        checks.append(check)
+        self.save_portal_checks(checks)
 
     def save_run_json(self, run_date: str, filename: str, data: Any) -> Path:
         path = self.run_dir(run_date) / filename

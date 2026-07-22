@@ -70,22 +70,35 @@ def _place_phone(place: dict[str, Any]) -> str:
     return place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber", "")
 
 
-def compute_confidence(location: Location, place: dict[str, Any], weights: dict[str, float]) -> MatchCandidate:
-    name_score = fuzz.token_sort_ratio(location.name.lower(), _place_name(place).lower())
+def nap_similarity(
+    location: Location,
+    candidate_name: str,
+    candidate_address: str,
+    candidate_phone: str,
+    candidate_website: str,
+    weights: dict[str, float],
+) -> dict[str, float]:
+    """Portal-unabhängiger NAP-Ähnlichkeitsvergleich (Name/Adresse/Telefon/Website-Domain).
+
+    Nutzt dieselbe Logik wie das Google-Places-Matching, aber auf einfachen
+    Strings statt eines Places-API-spezifischen JSON-Objekts - so nutzbar für
+    beliebige Portale (Foursquare, Yelp, erfasster Bookmarklet-Rohtext, ...).
+    """
+    name_score = fuzz.token_sort_ratio(location.name.lower(), (candidate_name or "").lower())
 
     addr_text = f"{location.street} {location.zip} {location.city}".strip().lower()
-    place_addr = (place.get("formattedAddress") or "").lower()
-    address_score = fuzz.token_set_ratio(addr_text, place_addr) if addr_text and place_addr else 0.0
-    if location.zip and location.zip in place_addr:
+    cand_addr = (candidate_address or "").lower()
+    address_score = fuzz.token_set_ratio(addr_text, cand_addr) if addr_text and cand_addr else 0.0
+    if location.zip and location.zip in cand_addr:
         address_score = max(address_score, 90.0)
 
     loc_phone = normalize_phone(location.phone)
-    place_phone = normalize_phone(_place_phone(place))
-    phone_score = 100.0 if loc_phone and place_phone and loc_phone == place_phone else 0.0
+    cand_phone = normalize_phone(candidate_phone)
+    phone_score = 100.0 if loc_phone and cand_phone and loc_phone == cand_phone else 0.0
 
     loc_domain = _domain(location.website)
-    place_domain = _domain(place.get("websiteUri", ""))
-    domain_score = 100.0 if loc_domain and place_domain and loc_domain == place_domain else 0.0
+    cand_domain = _domain(candidate_website)
+    domain_score = 100.0 if loc_domain and cand_domain and loc_domain == cand_domain else 0.0
 
     confidence = (
         weights.get("name", 0.4) * name_score
@@ -93,13 +106,26 @@ def compute_confidence(location: Location, place: dict[str, Any], weights: dict[
         + weights.get("phone", 0.2) * phone_score
         + weights.get("website_domain", 0.1) * domain_score
     )
+    return {
+        "name_score": name_score,
+        "address_score": address_score,
+        "phone_score": phone_score,
+        "domain_score": domain_score,
+        "confidence": round(confidence, 1),
+    }
+
+
+def compute_confidence(location: Location, place: dict[str, Any], weights: dict[str, float]) -> MatchCandidate:
+    scores = nap_similarity(
+        location, _place_name(place), place.get("formattedAddress") or "", _place_phone(place), place.get("websiteUri", ""), weights
+    )
     return MatchCandidate(
         place=place,
-        confidence=round(confidence, 1),
-        name_score=name_score,
-        address_score=address_score,
-        phone_score=phone_score,
-        domain_score=domain_score,
+        confidence=scores["confidence"],
+        name_score=scores["name_score"],
+        address_score=scores["address_score"],
+        phone_score=scores["phone_score"],
+        domain_score=scores["domain_score"],
     )
 
 

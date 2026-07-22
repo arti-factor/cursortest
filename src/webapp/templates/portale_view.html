@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Verzeichnisse - {{ slug }} - gbp-audit{% endblock %}
+{% block content %}
+<h1>Verzeichnis-Konsistenz: {{ slug }}</h1>
+<p class="muted">
+  Prüft, ob die Standorte auf weiteren Verzeichnis-Portalen (neben Google) gelistet sind und ob
+  Name/Adresse/Telefon dort übereinstimmen. Unabhängig vom monatlichen GBP-Audit - nur bei Bedarf
+  manuell auslösen.
+</p>
+
+<div class="panel">
+  <h2 style="margin-top:0">Bookmarklet einrichten (einmalig)</h2>
+  <p class="muted">
+    Für Portale ohne eigene Such-API: diesen Link auf die Lesezeichenleiste <strong>ziehen</strong>
+    (nicht anklicken). Auf der Portal-Seite dann markieren, was zum Standort passt, und das
+    Lesezeichen anklicken - es erscheinen "Übernehmen" und "Kein Eintrag vorhanden".
+  </p>
+  <a class="btn secondary" href="{{ bookmarklet_href }}" onclick="alert('Bitte diesen Link auf die Lesezeichenleiste ziehen, nicht anklicken.'); return false;">
+    🔖 gbp-audit erfassen
+  </a>
+</div>
+
+{% for eintrag in matrix %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ eintrag.location.name }} <span class="muted">({{ eintrag.location.address }})</span></h2>
+  <table>
+  <thead><tr><th>Portal</th><th>Status</th><th>Details</th><th>Aktion</th></tr></thead>
+  <tbody>
+  {% for zeile in eintrag.zeile %}
+  <tr>
+    <td>{{ zeile.portal.label }}</td>
+    <td><span class="badge {{ zeile.badge }}">{{ zeile.status_label }}</span></td>
+    <td class="muted">
+      {% if zeile.check and zeile.check.gefundener_name %}
+        {{ zeile.check.gefundener_name }} - {{ zeile.check.gefundene_adresse }}
+        {% if zeile.check.aehnlichkeit_prozent is not none %}({{ "%.0f"|format(zeile.check.aehnlichkeit_prozent) }}% Übereinstimmung){% endif %}
+      {% elif zeile.check and zeile.check.zeitstempel %}
+        zuletzt geprüft: {{ zeile.check.zeitstempel[:10] }}
+      {% else %}
+        -
+      {% endif %}
+    </td>
+    <td>
+      {% if zeile.portal.check_type.value == "api" %}
+      <form method="post" action="{{ url_for('portal_pruefen_api', slug=slug, standort_id=eintrag.location.id, portal_id=zeile.portal.id) }}">
+        <button type="submit" class="btn secondary">Prüfen</button>
+      </form>
+      {% else %}
+      <details>
+        <summary class="btn secondary" style="display:inline-block; cursor:pointer;">Prüfen</summary>
+        <div style="margin-top:0.6rem;">
+          <form method="post" action="{{ url_for('portal_pruefen_start', slug=slug, standort_id=eintrag.location.id, portal_id=zeile.portal.id) }}" target="_blank">
+            <button type="submit" class="btn secondary">Suchseite öffnen</button>
+          </form>
+          <p class="muted" style="margin:0.5rem 0 0.2rem;">Danach auf der Portal-Seite markieren + Bookmarklet klicken. Falls das dort nicht funktioniert (z.B. durch Sicherheitseinstellungen der Seite blockiert), Text hier manuell einfügen:</p>
+          <form method="post" action="{{ url_for('portal_manuell_submit', slug=slug, standort_id=eintrag.location.id, portal_id=zeile.portal.id) }}">
+            <textarea name="erfasster_text" rows="3" style="width:100%; font:inherit; padding:0.4rem;" placeholder="Name, Adresse, Telefon wie auf der Portal-Seite angezeigt"></textarea>
+            <div class="actions">
+              <button type="submit">Übernehmen</button>
+              <button type="submit" name="kein_eintrag" value="1" class="btn secondary">Kein Eintrag vorhanden</button>
+            </div>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  </table>
+</div>
+{% endfor %}
+
+<a class="btn secondary" href="{{ url_for('client_detail', slug=slug) }}">Zurück zum Mandanten</a>
+{% endblock %}

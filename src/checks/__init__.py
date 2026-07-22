@@ -17,6 +17,7 @@ from src.checks import (
     group7_qna,
     group8_leistungen,
     group9_performance,
+    group10_verzeichnisse,
 )
 from src.checks.base import CheckContext
 
@@ -31,6 +32,7 @@ GROUPS: list[tuple[str, object]] = [
     ("qna", group7_qna),
     ("leistungen", group8_leistungen),
     ("performance", group9_performance),
+    ("verzeichnis_konsistenz", group10_verzeichnisse),
 ]
 
 

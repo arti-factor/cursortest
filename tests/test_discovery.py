@@ -5,6 +5,7 @@ from src.discovery import (
     extract_heuristic_locations,
     extract_locations_from_html,
     extract_json_ld_locations,
+    extract_nap_from_text,
 )
 from src.models import Location
 
@@ -155,3 +156,17 @@ def test_dedupe_merged_bei_gleicher_adresse_trotz_unterschiedlicher_namen():
 def test_extract_heuristic_locations_ohne_treffer_liefert_leere_liste():
     html = "<html><body><h1>Über uns</h1><p>Wir sind ein tolles Team.</p></body></html>"
     assert extract_heuristic_locations(html, "https://example.de/ueber-uns") == []
+
+
+def test_extract_nap_from_text_erkennt_bookmarklet_markierten_text():
+    text = "Online-Profession GmbH & Co. KG\nDrubbel 5/6\n48143 Münster\nTelefon: 0251 590630"
+    result = extract_nap_from_text(text)
+    assert result["name"] == "Online-Profession GmbH & Co. KG"
+    assert result["street"] == "Drubbel 5/6"
+    assert result["zip"] == "48143"
+    assert result["city"] == "Münster"
+    assert result["phone"]
+
+
+def test_extract_nap_from_text_leerer_text():
+    assert extract_nap_from_text("") == {"name": "", "street": "", "zip": "", "city": "", "phone": ""}

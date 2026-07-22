@@ -234,6 +234,8 @@ def perform_run(
         except FileNotFoundError:
             pass
 
+    portal_checks = client.load_portal_checks()
+
     results = []
     for loc in locations:
         ctx = CheckContext(
@@ -244,6 +246,7 @@ def perform_run(
             all_locations=locations,
             all_profiles=profiles,
             previous_profile=previous_profiles.get(loc.id),
+            portal_checks=portal_checks,
         )
         checks = run_all_checks(ctx)
         results.append(score_location(loc, profiles.get(loc.id), modus, checks, config["scoring"]))
@@ -275,6 +278,7 @@ def perform_diff(client: ClientDirs, config: dict[str, Any], run1: str, run2: st
     neu = client.load_run_json(run2, "profiles.json")
 
     locations = {loc.id: loc for loc in client.load_locations()}
+    portal_checks = client.load_portal_checks()
     rows: list[DiffRow] = []
 
     for loc_id, loc in locations.items():
@@ -291,6 +295,7 @@ def perform_diff(client: ClientDirs, config: dict[str, Any], run1: str, run2: st
             config=config,
             all_locations=list(locations.values()),
             all_profiles=alt_profiles,
+            portal_checks=portal_checks,
         )
         ctx_neu = CheckContext(
             location=loc,
@@ -299,6 +304,7 @@ def perform_diff(client: ClientDirs, config: dict[str, Any], run1: str, run2: st
             config=config,
             all_locations=list(locations.values()),
             all_profiles=neu_profiles,
+            portal_checks=portal_checks,
         )
 
         score_alt = score_location(loc, alt_profile, ctx_alt.modus, run_all_checks(ctx_alt), config["scoring"]).gesamtscore
